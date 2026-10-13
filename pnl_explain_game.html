@@ -2,7 +2,7 @@
 <style>body{font-family:sans-serif;max-width:820px;margin:20px auto;padding:0 10px;line-height:1.45}button{margin:3px;padding:6px 10px}.box{border:1px solid #999;padding:10px;margin:10px 0}.ok{color:#060}.no{color:#a00}.steps li{font-family:monospace}.tab{display:none}.on{display:block}</style></head><body>
 <h2>P&L Explain Trainer – European Gas (NBP / TTF)</h2>
 <div><button onclick="tab('play')">Play</button><button onclick="tab('ref')">Cheat sheet</button><button onclick="if(confirm('Reset progress?')){localStorage.removeItem('pnlg');location.reload()}">Reset</button></div>
-<div id="play" class="tab on"><div id="lv"></div><div id="stat"></div><div class="box" id="qb"></div><div id="fb"></div></div>
+<div id="play" class="tab on"><div><b>Choose level:</b></div><div id="lv"></div><div id="stat"></div><div class="box" id="qb"></div><div id="fb"></div></div>
 <div id="ref" class="tab box"><h3>Cheat sheet</h3><ul>
 <li><b>P&L = signed position × price change.</b> Long +, short −. Sense check: long & up = profit.</li>
 <li><b>TTF</b> EUR/MWh, 1 lot = 1 MW. MWh = MW × days × 24 (ignore DST here).</li>
@@ -117,17 +117,18 @@ LEVELS.forEach(function(l){S.lv[l]=S.lv[l]||{c:0,n:0,r:[]};});
 var cur='analyst',Q=null,done=false;
 function save(){localStorage.setItem('pnlg',JSON.stringify(S));}
 function tab(t){['play','ref'].forEach(function(x){document.getElementById(x).className=(x==='ref'?'tab box':'tab')+(x===t?' on':'');});}
-function drawLv(){document.getElementById('lv').innerHTML=LEVELS.map(function(l,i){var s=S.lv[l],last=s.r.slice(-10),c=last.filter(Boolean).length;return '<button '+(i<S.unl?'':'disabled ')+'onclick="cur=\''+l+'\';next()">'+(l===cur?'▶ ':'')+NAMES[l]+' ('+c+'/'+last.length+' last 10)'+(i<S.unl?'':' 🔒')+'</button>';}).join('');
- var s=S.lv[cur];document.getElementById('stat').innerHTML='Level: <b>'+NAMES[cur]+'</b> | total '+s.c+'/'+s.n+' | streak '+S.streak+' (best '+S.best+') | Unlock next: 8 of last 10 correct.';}
+function drawLv(){document.getElementById('lv').innerHTML=LEVELS.map(function(l,i){var s=S.lv[l],last=s.r.slice(-10),c=last.filter(Boolean).length;return '<button onclick="cur=\''+l+'\';next()">'+(l===cur?'▶ ':'')+NAMES[l]+' ('+c+'/'+last.length+' last 10)'+'</button>';}).join('');
+ var s=S.lv[cur];document.getElementById('stat').innerHTML='Level: <b>'+NAMES[cur]+'</b> | total '+s.c+'/'+s.n+' | streak '+S.streak+' (best '+S.best+') | Pick any level above.';}
 function next(){Q=GEN[cur][Math.floor(Math.random()*GEN[cur].length)]();done=false;drawLv();var h='<p>'+Q.q+'</p>';
  if(Q.choices)h+=Q.choices.map(function(c,i){return '<div><button onclick="ans('+i+')">'+String.fromCharCode(65+i)+'</button> '+c+'</div>';}).join('');
  else h+='<input id="in" size="16" onkeydown="if(event.key===\'Enter\')ans()"> '+Q.unit+' <button onclick="ans()">Submit</button><br><small>Use − for losses; commas OK.</small>';
- document.getElementById('qb').innerHTML=h;document.getElementById('fb').innerHTML='';var i=document.getElementById('in');if(i)i.focus();}
+ h+='<div><button onclick="reveal()">Show answer &amp; explanation (skip, not scored)</button></div>';document.getElementById('qb').innerHTML=h;document.getElementById('fb').innerHTML='';var i=document.getElementById('in');if(i)i.focus();}
 function ans(k){if(done)return;var ok;
  if(Q.choices)ok=k===Q.correct;else{var v=parseFloat(document.getElementById('in').value.replace(/[,£€\s]/g,'').replace('−','-'));if(isNaN(v))return;var tol=Q.tol!==undefined?Q.tol:Math.max(1,Math.abs(Q.answer)*0.001);ok=Math.abs(v-Q.answer)<=tol;}
  done=true;var s=S.lv[cur];s.n++;s.r.push(ok);if(s.r.length>10)s.r.shift();if(ok){s.c++;S.streak++;S.best=Math.max(S.best,S.streak);}else S.streak=0;
- var i=LEVELS.indexOf(cur),un='';if(s.r.length>=10&&s.r.filter(Boolean).length>=8&&S.unl<=i+1&&i<3){S.unl=i+2;un='<p class="ok"><b>Promoted! '+NAMES[LEVELS[i+1]]+' unlocked.</b></p>';}
+ var i=LEVELS.indexOf(cur),un='';
  save();drawLv();
  document.getElementById('fb').innerHTML='<div class="box"><b class="'+(ok?'ok">Correct':'no">Not quite')+'</b> – answer: '+(Q.choices?Q.choices[Q.correct]:f(Q.answer,Q.unit==='p/th'?3:2)+' '+Q.unit+(Q.choices?'':' (tolerance ±'+(Q.tol!==undefined?Q.tol:f(Math.max(1,Math.abs(Q.answer)*0.001)))+')'))+un+'<p><b>Worked solution</b></p><ol class="steps">'+Q.steps.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ol><p><b>To the desk:</b> '+Q.desk+'</p><button onclick="next()">Next question</button></div>';}
+function reveal(){if(done)return;done=true;document.getElementById('fb').innerHTML='<div class="box"><b>Skipped (not scored)</b> – answer: '+(Q.choices?Q.choices[Q.correct]:f(Q.answer,Q.unit==='p/th'?3:2)+' '+Q.unit)+'<p><b>Worked solution</b></p><ol class="steps">'+Q.steps.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ol><p><b>To the desk:</b> '+Q.desk+'</p><button onclick="next()">Next question</button></div>';}
 next();
 </script></body></html>
