@@ -1,0 +1,133 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>P&L Explain Trainer – NBP/TTF</title>
+<style>body{font-family:sans-serif;max-width:820px;margin:20px auto;padding:0 10px;line-height:1.45}button{margin:3px;padding:6px 10px}.box{border:1px solid #999;padding:10px;margin:10px 0}.ok{color:#060}.no{color:#a00}.steps li{font-family:monospace}.tab{display:none}.on{display:block}</style></head><body>
+<h2>P&L Explain Trainer – European Gas (NBP / TTF)</h2>
+<div><button onclick="tab('play')">Play</button><button onclick="tab('ref')">Cheat sheet</button><button onclick="if(confirm('Reset progress?')){localStorage.removeItem('pnlg');location.reload()}">Reset</button></div>
+<div id="play" class="tab on"><div id="lv"></div><div id="stat"></div><div class="box" id="qb"></div><div id="fb"></div></div>
+<div id="ref" class="tab box"><h3>Cheat sheet</h3><ul>
+<li><b>P&L = signed position × price change.</b> Long +, short −. Sense check: long & up = profit.</li>
+<li><b>TTF</b> EUR/MWh, 1 lot = 1 MW. MWh = MW × days × 24 (ignore DST here).</li>
+<li><b>NBP</b> p/th, 1 lot = 1,000 th/day. Therms = lots × 1,000 × days. GBP P&L = therms × Δp / 100.</li>
+<li><b>1 MWh = 34.1214 therms.</b> p/th = EUR/MWh × EURGBP × 100 / 34.1214.</li>
+<li><b>Time spread</b> total = near leg + far leg. Split: spread P&L = near vol × Δ(near−far); residual = (near vol − far vol) × Δfar.</li>
+<li><b>New trade</b> = signed vol × (close − trade price).</li>
+<li><b>FX P&L</b> (GBP reporting) = opening EUR MTM × (EURGBP today − yesterday); EUR price P&L converted at today’s rate.</li>
+<li><b>Roll-down</b> (unchanged curve) = vol × (nearer price − your price) × days elapsed / days between tenors.</li>
+<li><b>Daily explain:</b> Actual = New trades + Price moves (per leg) + FX + Carry + Unexplained.</li>
+<li><b>Unexplained</b> ÷ a leg’s move = clean lot multiple ⇒ missed trade; leg moved in system not on screen ⇒ mis-mark.</li>
+<li><b>Presenting:</b> total → largest drivers → new trades → FX/carry → unexplained + action.</li></ul></div>
+<script>
+var TH=34.1214;
+function rnd(a,b,s){s=s||0.01;return +(Math.round((a+Math.random()*(b-a))/s)*s).toFixed(4);}
+function ri(a,b){return a+Math.floor(Math.random()*(b-a+1));}
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function f(x,d){d=d===undefined?2:d;return Number(x).toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function sg(x){return x<0?'('+f(x,0)+')':f(x,0);}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function dim(y,m){return new Date(Date.UTC(y,m+1,0)).getUTCDate();}
+function tenor(){var t=pick(['M','Q','C']),y=pick([2026,2027]);
+ if(t==='M'){var m=ri(0,11);return {name:MON[m]+'-'+(y%100),days:dim(y,m)};}
+ if(t==='Q'){var q=ri(0,3),d=0;for(var i=0;i<3;i++)d+=dim(y,q*3+i);return {name:'Q'+(q+1)+'-'+(y%100),days:d};}
+ return {name:'Cal-'+(y%100),days:(y%4===0?366:365)};}
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=ri(0,i),t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function mc(correct,wrong){var c=shuffle([correct].concat(wrong));return {choices:c,correct:c.indexOf(correct)};}
+var GEN={
+analyst:[
+function ttfOut(){var t=tenor(),n=ri(1,20)*(Math.random()<.5?-1:1),dp=rnd(-3,3,0.05)||0.25,h=t.days*24,v=n*h,a=v*dp;
+ return {type:'ttfOut',p:{n:n,days:t.days,dp:dp},q:'You are '+(n>0?'long ':'short ')+Math.abs(n)+' lots (1 MW each) of TTF '+t.name+' ('+t.days+' days). Price moves '+(dp>0?'+':'')+dp.toFixed(2)+' EUR/MWh. P&L in EUR?',answer:a,unit:'EUR',
+ steps:['Hours = '+t.days+' days × 24 = '+h,'Signed volume = '+n+' × '+h+' = '+f(v,0)+' MWh','P&L = '+f(v,0)+' × '+dp.toFixed(2)+' = '+f(a)+' EUR','Sense check: '+(n>0?'long':'short')+' and price '+(dp>0?'up':'down')+' ⇒ '+(a>0?'profit':'loss')],
+ desk:'"'+(n>0?'Long ':'Short ')+f(Math.abs(v),0)+' MWh of '+t.name+', it moved '+dp.toFixed(2)+', so '+sg(a)+' EUR on the outright."'};},
+function nbpOut(){var t=tenor(),n=ri(1,20)*(Math.random()<.5?-1:1),dp=rnd(-5,5,0.05)||0.5,v=n*1000*t.days,a=v*dp/100;
+ return {type:'nbpOut',p:{n:n,days:t.days,dp:dp},q:'You are '+(n>0?'long ':'short ')+Math.abs(n)+' lots (1,000 th/day) of NBP '+t.name+' ('+t.days+' days). Price moves '+(dp>0?'+':'')+dp.toFixed(2)+' p/th. P&L in GBP?',answer:a,unit:'GBP',
+ steps:['Signed volume = '+n+' × 1,000 × '+t.days+' = '+f(v,0)+' therms','P&L (pence) = '+f(v,0)+' × '+dp.toFixed(2)+' = '+f(v*dp)+' p','÷ 100 = '+f(a)+' GBP'],
+ desk:'"'+f(Math.abs(v),0)+' therms '+(n>0?'long':'short')+' NBP '+t.name+', '+dp.toFixed(2)+'p move, '+sg(a)+' GBP."'};},
+function lotSize(){var t=tenor(),n=ri(1,25),a=n*t.days*24;
+ return {type:'lotSize',p:{n:n,days:t.days},q:'How many MWh is '+n+' MW of TTF '+t.name+' ('+t.days+' days, assume 24h/day, ignore DST)?',answer:a,unit:'MWh',
+ steps:['MWh = MW × days × 24','= '+n+' × '+t.days+' × 24 = '+f(a,0)],desk:'"'+n+' MW of '+t.name+' is '+f(a,0)+' MWh."'};},
+function signMC(){var lg=Math.random()<.5,up=Math.random()<.5,prof=(lg===up);var m=mc(prof?'Profit':'Loss',[prof?'Loss':'Profit','Zero – only realised P&L counts']);
+ return {type:'signMC',p:{lg:lg,up:up},q:'You are '+(lg?'long':'short')+' TTF and the price goes '+(up?'up':'down')+'. Your MTM P&L is a:',choices:m.choices,correct:m.correct,
+ steps:['P&L = signed position × Δprice','Sign of position: '+(lg?'+':'−')+', sign of Δ: '+(up?'+':'−')+' ⇒ '+(prof?'+ (profit)':'− (loss)'),'Unrealised MTM is still P&L on a trading desk.'],desk:'"Position and move '+(prof?'same':'opposite')+' sign, so '+(prof?'a gain':'a loss')+'."'};}
+],
+associate:[
+function tSpread(){var n=ri(1,10),d1=pick([90,90,91]),d2=pick([91,92]),a1=rnd(-2,2,0.05),a2=rnd(-2,2,0.05),h1=d1*24,h2=d2*24,p1=n*h1*a1,p2=-n*h2*a2,a=p1+p2;
+ return {type:'tSpread',p:{n:n,h1:h1,h2:h2,a1:a1,a2:a2},q:'Long '+n+' MW TTF Q1 ('+h1+' h), short '+n+' MW TTF Q2 ('+h2+' h). Q1 moves '+a1.toFixed(2)+', Q2 moves '+a2.toFixed(2)+' EUR/MWh. Total P&L (EUR)?',answer:a,unit:'EUR',
+ steps:['Q1 leg: +'+n+' × '+h1+' × '+a1.toFixed(2)+' = '+f(p1),'Q2 leg: −'+n+' × '+h2+' × '+a2.toFixed(2)+' = '+f(p2),'Total = '+f(p1)+' + '+f(p2)+' = '+f(a),'Spread Q1−Q2 moved '+(a1-a2).toFixed(2)],
+ desk:'"Long the Q1/Q2 spread, spread moved '+(a1-a2).toFixed(2)+', '+sg(a)+' EUR total."'};},
+function residual(){var n=ri(1,10),h1=pick([2160,2208]),h2=pick([2184,2208,2160]),a1=rnd(-2,2,0.05),a2=rnd(-2,2,0.05),tot=n*h1*a1-n*h2*a2,sp=n*h1*(a1-a2),r=tot-sp;
+ return {type:'residual',p:{n:n,h1:h1,h2:h2,a1:a1,a2:a2},q:'Long '+n+' MW near leg ('+h1+' h), short '+n+' MW far leg ('+h2+' h). Near moves '+a1.toFixed(2)+', far moves '+a2.toFixed(2)+'. Split P&L into spread P&L (on near-leg volume) + residual outright. What is the RESIDUAL (EUR)?',answer:r,unit:'EUR',
+ steps:['Total = '+n+'×'+h1+'×'+a1.toFixed(2)+' − '+n+'×'+h2+'×'+a2.toFixed(2)+' = '+f(tot),'Spread P&L = '+n+'×'+h1+'×('+a1.toFixed(2)+' − '+a2.toFixed(2)+') = '+f(sp),'Residual = '+f(tot)+' − '+f(sp)+' = '+f(r),'Check: net far-leg volume '+n+'×('+h1+'−'+h2+') = '+(n*(h1-h2))+' MWh × far move '+a2.toFixed(2)+' = '+f(n*(h1-h2)*a2)],
+ desk:'"'+sg(sp)+' from the spread, '+sg(r)+' from the small net outright due to hour mismatch."'};},
+function newTrade(){var buy=Math.random()<.5,n=ri(1,20),t=tenor(),tp=rnd(25,45,0.05),cl=+(tp+rnd(-1,1,0.05)).toFixed(2),v=(buy?1:-1)*n*t.days*24,a=v*(cl-tp);
+ return {type:'newTrade',p:{v:v,tp:tp,cl:cl},q:'Today you '+(buy?'bought':'sold')+' '+n+' MW TTF '+t.name+' ('+t.days+' days) at '+tp.toFixed(2)+'. It closed at '+cl.toFixed(2)+'. New-trade P&L (EUR)?',answer:a,unit:'EUR',
+ steps:['Signed volume = '+(buy?'+':'−')+n+' × '+t.days+' × 24 = '+f(v,0),'Close − trade = '+cl.toFixed(2)+' − '+tp.toFixed(2)+' = '+(cl-tp).toFixed(2),'P&L = '+f(v,0)+' × '+(cl-tp).toFixed(2)+' = '+f(a)],
+ desk:'"New trade: '+(buy?'bought':'sold')+' at '+tp.toFixed(2)+' vs close '+cl.toFixed(2)+', '+sg(a)+' EUR day-one."'};},
+function wsMC(){var w=rnd(-1.5,1.5,0.05)||0.1,s=rnd(-1.5,1.5,0.05),lg=Math.random()<.5,ch=w-s,prof=(lg?ch:-ch)>0;
+ var m=mc(prof?'Profit – spread moved in your favour':'Loss – spread moved against you',[prof?'Loss – spread moved against you':'Profit – spread moved in your favour','No P&L – spreads are hedged']);
+ return {type:'wsMC',p:{},q:'You are '+(lg?'long':'short')+' the Win/Sum spread (Win − Sum). Winter moves '+w.toFixed(2)+', Summer '+s.toFixed(2)+'. Ignoring volume mismatch:',choices:m.choices,correct:m.correct,
+ steps:['Spread change = '+w.toFixed(2)+' − '+s.toFixed(2)+' = '+ch.toFixed(2),(lg?'Long':'Short')+' spread ⇒ P&L sign = '+(lg?'+':'−')+' × '+ch.toFixed(2)],desk:'"Win/Sum '+(ch>=0?'widened':'narrowed')+' '+Math.abs(ch).toFixed(2)+'."'};}
+],
+vp:[
+function conv(){var p=rnd(25,45,0.05),fx=rnd(0.84,0.88,0.0001),a=p*fx*100/TH;
+ return {type:'conv',p:{p:p,fx:fx},q:'Convert TTF '+p.toFixed(2)+' EUR/MWh to p/th at EURGBP '+fx.toFixed(4)+'.',answer:a,unit:'p/th',tol:0.01,
+ steps:['GBP/MWh = '+p.toFixed(2)+' × '+fx.toFixed(4)+' = '+f(p*fx,4),'p/MWh = × 100 = '+f(p*fx*100,2),'p/th = ÷ 34.1214 = '+f(a,3)],desk:'"TTF at '+p.toFixed(2)+' is '+a.toFixed(2)+'p/th equivalent."'};},
+function locSpread(){var n=ri(1,10),d=pick([28,30,31]),th=n*1000*d,mwh=th/TH,dn=rnd(-4,4,0.05),dt=rnd(-1.5,1.5,0.05),fx=rnd(0.84,0.88,0.0001),pn=th*dn/100,pe=-mwh*dt,pg=pe*fx,a=pn+pg;
+ return {type:'locSpread',p:{n:n,d:d,dn:dn,dt:dt,fx:fx},q:'Long '+n+' lots NBP ('+d+' days, 1,000 th/day) and short the same energy in TTF. NBP moves '+dn.toFixed(2)+' p/th, TTF '+dt.toFixed(2)+' EUR/MWh. EURGBP '+fx.toFixed(4)+' (unchanged). Total P&L in GBP?',answer:a,unit:'GBP',
+ steps:['NBP volume = '+n+' × 1,000 × '+d+' = '+f(th,0)+' th','NBP P&L = '+f(th,0)+' × '+dn.toFixed(2)+' / 100 = '+f(pn)+' GBP','TTF volume = '+f(th,0)+' / 34.1214 = '+f(mwh,3)+' MWh (short)','TTF P&L = −'+f(mwh,3)+' × '+dt.toFixed(2)+' = '+f(pe)+' EUR','In GBP: '+f(pe)+' × '+fx.toFixed(4)+' = '+f(pg),'Total = '+f(pn)+' + '+f(pg)+' = '+f(a)+' GBP'],
+ desk:'"Long NBP/TTF: NBP leg '+sg(pn)+', TTF leg '+sg(pg)+' GBP, net '+sg(a)+'."'};},
+function fxPnl(){var m0=ri(-500,500)*1000||100000,dm=ri(-50,50)*1000,f0=rnd(0.84,0.88,0.0001),f1=+(f0+rnd(-0.006,0.006,0.0001)).toFixed(4),fxp=m0*(f1-f0),pp=dm*f1,tot=(m0+dm)*f1-m0*f0;
+ return {type:'fxPnl',p:{m0:m0,dm:dm,f0:f0,f1:f1},q:'Your TTF book had EUR MTM of '+f(m0,0)+' yesterday; today’s price P&L is '+f(dm,0)+' EUR. EURGBP went '+f0.toFixed(4)+' → '+f1.toFixed(4)+'. Reporting ccy GBP. What is the FX P&L (GBP)? (Convention: FX = old MTM × Δrate; price P&L at today’s rate.)',answer:fxp,unit:'GBP',
+ steps:['FX P&L = '+f(m0,0)+' × ('+f1.toFixed(4)+' − '+f0.toFixed(4)+') = '+f(fxp),'Price P&L in GBP = '+f(dm,0)+' × '+f1.toFixed(4)+' = '+f(pp),'Check: total GBP change = '+f(m0+dm,0)+'×'+f1.toFixed(4)+' − '+f(m0,0)+'×'+f0.toFixed(4)+' = '+f(tot)+' = FX + price ✓'],
+ desk:'"'+sg(pp)+' GBP from prices, '+sg(fxp)+' from EURGBP moving '+((f1-f0)*1e4).toFixed(0)+' pips on the existing EUR MTM."'};},
+function rollDown(){var n=ri(1,20),h=pick([720,744,2160,2208]),fr=rnd(30,45,0.05),nr=+(fr-rnd(-2,2,0.05)).toFixed(2),dd=ri(1,30),tt=ri(dd+5,120),exp=(nr-fr)*dd/tt,a=n*h*exp;
+ return {type:'rollDown',p:{n:n,h:h,fr:fr,nr:nr,dd:dd,tt:tt},q:'Long '+n+' MW ('+h+' h) of a TTF contract at '+fr.toFixed(2)+'. The next-nearer tenor is '+nr.toFixed(2)+', '+tt+' days closer. With an unchanged curve, linear roll-down over '+dd+' days: expected P&L (EUR)?',answer:a,unit:'EUR',
+ steps:['Curve gap = '+nr.toFixed(2)+' − '+fr.toFixed(2)+' = '+(nr-fr).toFixed(2),'Roll for '+dd+' days = '+(nr-fr).toFixed(2)+' × '+dd+'/'+tt+' = '+exp.toFixed(4),'P&L = '+n+' × '+h+' × '+exp.toFixed(4)+' = '+f(a)],
+ desk:'"Carry/roll: curve unchanged, rolling '+(nr<fr?'down':'up')+' gives '+sg(a)+' EUR over '+dd+' days."'};},
+function multiLeg(){var L=[],tot=0,st=[],fx=rnd(0.84,0.88,0.0001);for(var i=0;i<3;i++){var nbp=Math.random()<.5,n=ri(-10,10)||1,d=pick([30,31,90,92]);
+ if(nbp){var v=n*1000*d,dp=rnd(-4,4,0.05),pl=v*dp/100;L.push({nbp:1,v:v,dp:dp});st.push('NBP leg '+(i+1)+': '+f(v,0)+' th × '+dp.toFixed(2)+'/100 = '+f(pl)+' GBP');}
+ else{var v2=n*d*24,dp2=rnd(-2,2,0.05),pe=v2*dp2,pl=pe*fx;L.push({nbp:0,v:v2,dp:dp2});st.push('TTF leg '+(i+1)+': '+f(v2,0)+' MWh × '+dp2.toFixed(2)+' = '+f(pe)+' EUR × '+fx.toFixed(4)+' = '+f(pl)+' GBP');}tot+=pl;}
+ st.push('Total = '+f(tot)+' GBP');
+ return {type:'multiLeg',p:{L:L,fx:fx},q:'Book (EURGBP '+fx.toFixed(4)+'):<br>'+L.map(function(l,i){return 'Leg '+(i+1)+': '+(l.nbp?'NBP '+f(l.v,0)+' th, move '+l.dp.toFixed(2)+' p/th':'TTF '+f(l.v,0)+' MWh, move '+l.dp.toFixed(2)+' EUR/MWh');}).join('<br>')+'<br>Total price P&L in GBP?',answer:tot,unit:'GBP',steps:st,desk:'"Book '+sg(tot)+' GBP on price; biggest contributor first, then the rest."'};}
+],
+md:[
+function fullExplain(){var fx0=rnd(0.84,0.88,0.0001),fx1=+(fx0+rnd(-0.004,0.004,0.0001)).toFixed(4),vn=ri(-10,10)*30000||30000,dn=rnd(-4,4,0.05),vt=ri(-10,10)*744||744,dt=rnd(-2,2,0.05),m0=ri(-300,300)*1000,ntv=ri(-5,5)*720||720,ntp=rnd(25,45,0.05),ntc=+(ntp+rnd(-0.5,0.5,0.05)).toFixed(2),carry=-ri(50,800),
+ pn=vn*dn/100,pt=vt*dt*fx1,fxp=m0*(fx1-fx0),nt=ntv*(ntc-ntp)*fx1,un=pick([0,0,ri(-20,20)*100]),act=pn+pt+fxp+nt+carry+un;
+ return {type:'fullExplain',p:{vn:vn,dn:dn,vt:vt,dt:dt,m0:m0,fx0:fx0,fx1:fx1,ntv:ntv,ntp:ntp,ntc:ntc,carry:carry,act:act},
+ q:'Daily book (reporting GBP):<br>• NBP '+f(vn,0)+' th, move '+dn.toFixed(2)+' p/th<br>• TTF '+f(vt,0)+' MWh, move '+dt.toFixed(2)+' EUR/MWh; opening TTF EUR MTM '+f(m0,0)+'<br>• EURGBP '+fx0.toFixed(4)+' → '+fx1.toFixed(4)+'<br>• New trade: '+f(ntv,0)+' MWh TTF at '+ntp.toFixed(2)+', close '+ntc.toFixed(2)+'<br>• Carry (funding) '+f(carry,0)+' GBP<br>Reported actual P&L: '+f(act)+' GBP. What is the UNEXPLAINED (GBP)? (EUR items at today’s rate; FX = opening MTM × Δrate.)',answer:act-(pn+pt+fxp+nt+carry),unit:'GBP',
+ steps:['NBP = '+f(vn,0)+' × '+dn.toFixed(2)+'/100 = '+f(pn),'TTF = '+f(vt,0)+' × '+dt.toFixed(2)+' × '+fx1.toFixed(4)+' = '+f(pt),'FX = '+f(m0,0)+' × ('+fx1.toFixed(4)+' − '+fx0.toFixed(4)+') = '+f(fxp),'New trade = '+f(ntv,0)+' × ('+ntc.toFixed(2)+' − '+ntp.toFixed(2)+') × '+fx1.toFixed(4)+' = '+f(nt),'Carry = '+f(carry),'Explained = '+f(pn+pt+fxp+nt+carry),'Unexplained = '+f(act)+' − '+f(pn+pt+fxp+nt+carry)+' = '+f(act-(pn+pt+fxp+nt+carry))],
+ desk:'"Total '+sg(act)+': NBP '+sg(pn)+', TTF '+sg(pt)+', FX '+sg(fxp)+', new trades '+sg(nt)+', carry '+sg(carry)+', unexplained '+sg(act-(pn+pt+fxp+nt+carry))+'."'};},
+function priceAttr(){var g=GEN.vp[4]();g.type='priceAttr';g.q='MD drill – attribute the price component of this book quickly. '+g.q;return g;},
+function diagnose(){var k=ri(0,2),q=ri(2,10)*744,dp=rnd(0.5,2,0.05),un=q*dp,
+ txt=['Unexplained of '+f(un)+' EUR. TTF Dec moved '+dp.toFixed(2)+' today and '+f(un)+' / '+dp.toFixed(2)+' = '+f(q,0)+' MWh – exactly '+(q/744)+' MW of Dec. Trades blotter shows no Dec trades today. Most likely cause?',
+ 'Unexplained of '+f(un)+' EUR on a '+f(q,0)+' MWh TTF Dec position whose price did NOT move on the broker screen, but your system shows a '+dp.toFixed(2)+' move. Most likely cause?',
+ 'Unexplained of '+f(un)+' EUR appears only after a EURGBP rate change, and the TTF price P&L in your system is converted at yesterday’s rate. Most likely cause?'],
+ ans=['A missed / unbooked trade (position in the system is wrong)','A mis-mark (bad closing price in the system)','FX conversion error (stale rate in the explain)'],
+ m=mc(ans[k],ans.filter(function(_,i){return i!==k;}).concat(['Normal theta – ignore it']));
+ return {type:'diagnose',p:{},q:txt[k],choices:m.choices,correct:m.correct,steps:['Unexplained / price move = '+f(un)+' / '+dp.toFixed(2)+' = '+f(q,0)+' MWh – a clean lot multiple points to a volume or price issue on one leg.','Answer: '+ans[k]],desk:'"We have '+sg(un)+' unexplained; we traced it to '+ans[k].toLowerCase()+' and are correcting it."'};},
+function present(){var B=[['How should you open a P&L explain to the desk head?','Total P&L first, then the biggest drivers in order','Start with each trade chronologically','Start with the unexplained','Start with market colour'],
+ ['Unexplained is 15% of total. You should:','Flag it up front, give likely cause and fix timeline','Bury it in "other"','Plug it into carry','Not mention it unless asked'],
+ ['Best one-liner for a long NBP/TTF spread that made money as NBP outperformed?','"+X on the location spread as NBP rallied vs TTF; outright exposure flat"','"We made money on gas"','"TTF went down"','"Model says it is fine"'],
+ ['The FX line is large but the book is hedged in price. You say:','"FX P&L from revaluing our EUR MTM; we can hedge it if desired"','"FX is noise, ignore it"','"Prices drove everything"','"Risk systems are wrong"']],b=pick(B),m=mc(b[1],b.slice(2));
+ return {type:'present',p:{},q:b[0],choices:m.choices,correct:m.correct,steps:['Desk heads want: total → drivers by size → new trades → FX/carry → unexplained with an action.'],desk:b[1]};}
+]};
+var LEVELS=['analyst','associate','vp','md'];
+function gen(l){return pick(GEN[l])();}
+if(typeof module!=='undefined')module.exports={GEN:GEN,LEVELS:LEVELS,TH:TH};
+var NAMES={analyst:'Analyst',associate:'Associate',vp:'VP',md:'Director / MD'};
+var S=JSON.parse(localStorage.getItem('pnlg')||'null')||{unl:1,lv:{},streak:0,best:0};
+LEVELS.forEach(function(l){S.lv[l]=S.lv[l]||{c:0,n:0,r:[]};});
+var cur='analyst',Q=null,done=false;
+function save(){localStorage.setItem('pnlg',JSON.stringify(S));}
+function tab(t){['play','ref'].forEach(function(x){document.getElementById(x).className=(x==='ref'?'tab box':'tab')+(x===t?' on':'');});}
+function drawLv(){document.getElementById('lv').innerHTML=LEVELS.map(function(l,i){var s=S.lv[l],last=s.r.slice(-10),c=last.filter(Boolean).length;return '<button '+(i<S.unl?'':'disabled ')+'onclick="cur=\''+l+'\';next()">'+(l===cur?'▶ ':'')+NAMES[l]+' ('+c+'/'+last.length+' last 10)'+(i<S.unl?'':' 🔒')+'</button>';}).join('');
+ var s=S.lv[cur];document.getElementById('stat').innerHTML='Level: <b>'+NAMES[cur]+'</b> | total '+s.c+'/'+s.n+' | streak '+S.streak+' (best '+S.best+') | Unlock next: 8 of last 10 correct.';}
+function next(){Q=GEN[cur][Math.floor(Math.random()*GEN[cur].length)]();done=false;drawLv();var h='<p>'+Q.q+'</p>';
+ if(Q.choices)h+=Q.choices.map(function(c,i){return '<div><button onclick="ans('+i+')">'+String.fromCharCode(65+i)+'</button> '+c+'</div>';}).join('');
+ else h+='<input id="in" size="16" onkeydown="if(event.key===\'Enter\')ans()"> '+Q.unit+' <button onclick="ans()">Submit</button><br><small>Use − for losses; commas OK.</small>';
+ document.getElementById('qb').innerHTML=h;document.getElementById('fb').innerHTML='';var i=document.getElementById('in');if(i)i.focus();}
+function ans(k){if(done)return;var ok;
+ if(Q.choices)ok=k===Q.correct;else{var v=parseFloat(document.getElementById('in').value.replace(/[,£€\s]/g,'').replace('−','-'));if(isNaN(v))return;var tol=Q.tol!==undefined?Q.tol:Math.max(1,Math.abs(Q.answer)*0.001);ok=Math.abs(v-Q.answer)<=tol;}
+ done=true;var s=S.lv[cur];s.n++;s.r.push(ok);if(s.r.length>10)s.r.shift();if(ok){s.c++;S.streak++;S.best=Math.max(S.best,S.streak);}else S.streak=0;
+ var i=LEVELS.indexOf(cur),un='';if(s.r.length>=10&&s.r.filter(Boolean).length>=8&&S.unl<=i+1&&i<3){S.unl=i+2;un='<p class="ok"><b>Promoted! '+NAMES[LEVELS[i+1]]+' unlocked.</b></p>';}
+ save();drawLv();
+ document.getElementById('fb').innerHTML='<div class="box"><b class="'+(ok?'ok">Correct':'no">Not quite')+'</b> – answer: '+(Q.choices?Q.choices[Q.correct]:f(Q.answer,Q.unit==='p/th'?3:2)+' '+Q.unit+(Q.choices?'':' (tolerance ±'+(Q.tol!==undefined?Q.tol:f(Math.max(1,Math.abs(Q.answer)*0.001)))+')'))+un+'<p><b>Worked solution</b></p><ol class="steps">'+Q.steps.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ol><p><b>To the desk:</b> '+Q.desk+'</p><button onclick="next()">Next question</button></div>';}
+next();
+</script></body></html>
